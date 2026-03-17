@@ -9,3 +9,4 @@ Please download it from the release page.
 # Features to be implemented
 - color change
 - size change
+- UI improvements
