@@ -10,7 +10,6 @@ import android.icu.util.Calendar
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.datastore.preferences.core.edit
@@ -27,7 +26,6 @@ import androidx.glance.layout.Box
 import androidx.glance.layout.Column
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.padding
-import com.github.lalyos.jfiglet.FigletFont
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 
@@ -45,15 +43,13 @@ class FgClockWidget : GlanceAppWidget() {
             //dataをstateとして監視　初期値はfirstで読み取ったものを使用
             val prefs by store.data.collectAsState(initial = initialPrefs)
             //state内のFONTキーをもつデータをfontとして使用
-            val font = prefs[WidgetSettings.FONT] ?: "alligator2.flf"
-            //時刻を取得
-            val timeString = prefs[WidgetSettings.LAST_UPDATE_TIME] ?: "--:--"
-
-            val textColor = prefs[WidgetSettings.TEXT_COLOR] ?: Color.White.toArgb()
+            val font = prefs[WidgetSettings.FONT] ?: WidgetSettings.DEFAULT_FONT
+            val timeString = prefs[WidgetSettings.LAST_UPDATE_TIME] ?: WidgetSettings.EMPTY_TIME
+            val textColor = prefs[WidgetSettings.TEXT_COLOR] ?: WidgetSettings.DEFAULT_TEXT_COLOR
             GlanceTheme {
                 val date = java.time.LocalDate.now().toString()
                 //時刻を描画
-                val timef = FigletCache.render(context, font, timeString)
+                val timeRenderedFiglet = FigletCache.render(context, font, timeString)
                 Box(
                     GlanceModifier
                         .fillMaxSize().cornerRadius(0.dp),
@@ -64,7 +60,12 @@ class FgClockWidget : GlanceAppWidget() {
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = GlanceModifier.cornerRadius(0.dp).padding(16.dp)
                     ) {
-                        GlanceText(timef, R.font.cascadiamono, 10.sp, color = Color(textColor))
+                        GlanceText(
+                            timeRenderedFiglet,
+                            R.font.cascadiamono,
+                            10.sp,
+                            color = Color(textColor)
+                        )
                         GlanceText(date, R.font.cascadiamono, 14.sp, color = Color(textColor))
                     }
                 }
@@ -168,27 +169,14 @@ class FgClockWidgetReceiver : GlanceAppWidgetReceiver() {
             scheduleNextUpdate(context)
 
 
-            // 非同期で更新をかける
-            /*kotlinx.coroutines.MainScope().launch {
-                //アップデート
-                FgClockWidget().updateAll(context)
-                // 更新が終わってから次のアラームをセット
-                scheduleNextUpdate(context)
-            }*/
         }
     }
 
     //設置されたときに
     override fun onEnabled(context: Context) {
         super.onEnabled(context)
-        scheduleNextUpdate(context)
         // 配置された瞬間に最初の更新をキックする
-        /*kotlinx.coroutines.MainScope().launch {
-            //更新
-            FgClockWidget().updateAll(context)
-            // 更新が終わってから次のアラームをセット
-            scheduleNextUpdate(context)
-        }*/
+        scheduleNextUpdate(context)
         kotlinx.coroutines.runBlocking(Dispatchers.IO) {
             //datastoreを編集
             context.dataStore.edit { prefs ->
@@ -198,50 +186,6 @@ class FgClockWidgetReceiver : GlanceAppWidgetReceiver() {
                 prefs[WidgetSettings.LAST_UPDATE_TIME] = now
             }
         }
-    }
-}
-
-//figletを取得
-/*fun getFigletTime(context: Context, font: String): String {
-    //時刻を取得
-    val time = java.time.LocalTime.now()
-    val formatter = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
-    val timeString = time.format(formatter)
-
-
-    //時刻をfigletの文字列にして返す
-    return FigletCache.render(context, font, timeString)
-}*/
-
-
-//figletのキャッシュ
-/*object FigletCache {
-    @Volatile
-    private var fontData: ByteArray? = null
-    fun render(context: Context, font: String, text: String): String {
-        //フォントデータを格納
-        if (fontData == null) {
-            fontData = context.assets.open(font).readBytes()
-        }
-        //fontData -> inputStream
-        val stream = fontData!!.inputStream()
-        //streamと文字列を指定してfigletを返す
-        return FigletFont.convertOneLine(stream, text)
-            .replace("\r", "")
-    }
-}*/
-
-object FigletCache {
-    //hashmap (高速なmapみたいなもん)
-    private val fontDataMap = java.util.concurrent.ConcurrentHashMap<String, ByteArray>()
-
-    fun render(context: Context, font: String, text: String): String {
-        //あるなら取り出すないなら追加
-        val data = fontDataMap.getOrPut(font) {
-            context.assets.open(font).readBytes()
-        }
-        return FigletFont.convertOneLine(data.inputStream(), text)
-            .replace("\r", "")
     }
 }
 
